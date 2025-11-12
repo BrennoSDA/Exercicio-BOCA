@@ -1,0 +1,298 @@
+---
+title: "Análise dos Resultados ENADE"
+author: "Brenno Soares de Aguiar"
+date: "`r format(Sys.Date(), '%d de %B de %Y')`"
+output:
+  pdf_document:
+    latex_engine: xelatex
+    toc: true
+    number_sections: true
+    keep_tex: true
+always_allow_html: true
+mainfont: "Latin Modern Roman"
+header-includes:
+  - \usepackage{amsmath}
+  - \usepackage{amssymb}
+  - \usepackage{booktabs}
+  - \usepackage{array}
+  - \usepackage{lmodern}
+  - \usepackage{fontspec}
+  - \usepackage{mathspec}
+  - \setmainfont{Latin Modern Roman}
+  - \setmathsfont(Digits,Latin,Greek){Latin Modern Math}
+---
+
+
+```{r setup, include=FALSE}
+# Configurações globais
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+if(!require(pacman)) install.packages("pacman")
+
+# Carregar pacotes de forma organizada
+pacman::p_load(readxl, dplyr, ggplot2, kableExtra, tidyr, DT)
+
+# Tema padrão dos gráficos
+theme_set(theme_minimal(base_size = 12))
+plot_theme <- theme(
+  plot.title = element_text(face = "bold"),
+  axis.text = element_text(size = 10),
+  axis.title = element_text(size = 11)
+)
+```
+
+```{r}
+Enade <- read_excel("Enade.xlsx")
+
+Enade_limpo <- Enade %>%
+rename(
+area = `Área de Avaliação`,
+uf = `Sigla da UF**`,
+prop_enem = `Proporção de Concluintes participantes com nota no Enem`,
+nota_idd = `Nota Bruta - IDD`,
+nota_fg = `Nota Padronizada - FG`,
+nota_ce = `Nota Padronizada - CE`,
+idd_continuo = `IDD (Contínuo)`
+) %>%
+mutate(across(c(prop_enem, nota_idd, nota_fg, nota_ce, idd_continuo), ~ suppressWarnings(as.numeric(.))))
+
+str(Enade_limpo)
+
+summary_na <- sapply(Enade_limpo, function(x) sum(is.na(x)))
+cat("=== VERIFICAÇÃO DE VALORES AUSENTES ===\n")
+print(summary_na)
+
+summary_range <- Enade_limpo %>%
+summarise(across(where(is.numeric), list(min = min, max = max), na.rm = TRUE))
+
+# Cálculo centralizado de estatísticas principais
+
+resumo_geral <- Enade_limpo %>%
+summarise(
+media_enem = mean(prop_enem, na.rm = TRUE),
+mediana_enem = median(prop_enem, na.rm = TRUE),
+sd_enem = sd(prop_enem, na.rm = TRUE),
+media_idd = mean(nota_idd, na.rm = TRUE),
+mediana_idd = median(nota_idd, na.rm = TRUE),
+sd_idd = sd(nota_idd, na.rm = TRUE),
+media_ce = mean(nota_ce, na.rm = TRUE),
+mediana_ce = median(nota_ce, na.rm = TRUE),
+sd_ce = sd(nota_ce, na.rm = TRUE),
+media_fg = mean(nota_fg, na.rm = TRUE),
+mediana_fg = median(nota_fg, na.rm = TRUE),
+sd_fg = sd(nota_fg, na.rm = TRUE)
+)
+
+cat("\n=== INTERVALOS DAS VARIÁVEIS NUMÉRICAS ===\n")
+print(summary_range)
+```
+
+```{r}
+freq_area <- table(Enade_limpo$area)
+prop_area <- prop.table(freq_area) * 100
+
+df_area <- data.frame(
+Área = names(freq_area),
+Frequência = as.numeric(freq_area),
+Porcentagem = round(as.numeric(prop_area), 2)
+)
+
+#Tabela interativa
+datatable(df_area, caption = "Distribuição de Frequência - Área de Avaliação")
+
+#Gráfico Horizontal
+ggplot(df_area, aes(x = reorder(Área, Frequência), y = Frequência)) +
+geom_bar(stat = "identity", fill = "steelblue", alpha = 0.7) +
+labs(title = "Distribuição por Todas as Áreas de Avaliação",
+x = "Área de Avaliação", y = "Frequência") +
+coord_flip() + plot_theme
+```
+
+  O gráfico de barras evidencia que há grande concentração de cursos nas áreas da saúde e das engenharias, com destaque para Enfermagem, Engenharia Civil e Fisioterapia. Essas três áreas concentram o maior número de cursos avaliados, indicando maior presença e capilaridade dessas formações no país. Por outro lado, cursos como Tecnologia em Segurança no Trabalho, Engenharia Florestal e Tecnologia em Agronegócios possuem menor frequência, refletindo menor representatividade no conjunto de dados. Essa distribuição pode estar associada à demanda do mercado de trabalho e à tradição acadêmica dessas áreas, já que saúde e engenharia costumam reunir maior número de instituições e alunos em todo o território nacional.
+
+```{r}
+freq_uf <- table(Enade_limpo$uf)
+prop_uf <- prop.table(freq_uf) * 100
+
+df_uf <- data.frame(
+UF = names(freq_uf),
+Frequência = as.numeric(freq_uf),
+Porcentagem = round(as.numeric(prop_uf), 2)
+) %>% arrange(desc(Frequência))
+
+datatable(df_uf, caption = "Distribuição de Frequência - Sigla da UF")
+
+#Gráfico horizontal
+ggplot(df_uf, aes(x = reorder(UF, Frequência), y = Frequência)) +
+geom_bar(stat = "identity", fill = "darkgreen", alpha = 0.7) +
+labs(title = "Distribuição por Todas as UFs",
+x = "UF", y = "Frequência") +
+coord_flip() + plot_theme
+```
+
+  A análise mostra uma concentração acentuada de cursos no estado de São Paulo (SP), seguido por Minas Gerais (MG), Paraná (PR) e Rio Grande do Sul (RS). Esses estados são historicamente reconhecidos por possuir grande número de instituições de ensino superior, tanto públicas quanto privadas, o que explica as maiores frequências observadas. Estados das regiões Norte e Nordeste, como Acre (AC), Roraima (RR) e Amapá (AP), apresentam menor número de cursos avaliados, o que indica desigualdade regional na oferta e distribuição do ensino superior. Esse padrão sugere que o eixo Sul-Sudeste concentra a maior parte das oportunidades de formação, tanto em quantidade quanto em diversidade de cursos.
+  
+```{r}
+medidas_proporcao <- Enade_limpo %>%
+summarise(
+Média = mean(prop_enem, na.rm = TRUE),
+Mediana = median(prop_enem, na.rm = TRUE),
+Desvio_Padrão = sd(prop_enem, na.rm = TRUE),
+Mínimo = min(prop_enem, na.rm = TRUE),
+Máximo = max(prop_enem, na.rm = TRUE),
+Q1 = quantile(prop_enem, 0.25, na.rm = TRUE),
+Q3 = quantile(prop_enem, 0.75, na.rm = TRUE)
+)
+
+kable(medidas_proporcao, caption = "Medidas Descritivas - Proporção ENEM") %>%
+kable_styling(bootstrap_options = "striped")
+
+#Histograma com densidade
+ggplot(Enade_limpo %>% filter(!is.na(prop_enem)), aes(x = prop_enem)) +
+geom_histogram(aes(y = after_stat(density)), bins = 30, fill = "lightblue", color = "black", alpha = 0.7) +
+geom_density(color = "darkblue", size = 1) +
+labs(title = "Distribuição - Proporção de Concluintes com Nota no ENEM",
+x = "Proporção", y = "Densidade") + plot_theme
+
+#Boxplot
+ggplot(Enade_limpo %>% filter(!is.na(prop_enem)), aes(y = prop_enem)) +
+geom_boxplot(fill = "lightcoral", alpha = 0.7) +
+labs(title = "Boxplot - Proporção de Concluintes com Nota no ENEM",
+y = "Proporção") + plot_theme
+```
+
+  A média da proporção de concluintes com nota do ENEM é `r round(resumo_geral$media_enem, 2)`,
+com mediana `r round(resumo_geral$mediana_enem, 2)` e desvio-padrão de `r round(resumo_geral$sd_enem, 2)`. Os valores variam entre `r round(medidas_proporcao$Mínimo, 2)` e `r round(medidas_proporcao$Máximo, 2)`, assim, o histograma revela que a maior parte dos cursos apresenta alta proporção de concluintes com nota do ENEM, com grande concentração próxima de 1 (ou 100%). Isso indica que, em muitos cursos, quase todos os alunos utilizam o ENEM como forma de ingresso ou avaliação. Há, contudo, uma cauda à esquerda, com valores menores, mostrando que alguns cursos possuem baixa adesão ao ENEM, possivelmente por adotarem vestibulares próprios ou outros processos seletivos. A distribuição é assimétrica à direita, com leve inclinação que reforça a predominância de cursos com alta proporção. Esse comportamento sugere tendência crescente de uso do ENEM como principal meio de ingresso e avaliação de desempenho estudantil.
+  
+  O boxplot demonstra que a mediana da proporção está próxima de 0,8, indicando que metade dos cursos tem pelo menos 80% dos concluintes com nota do ENEM. O intervalo interquartílico é relativamente estreito, sugerindo baixa dispersão entre os cursos mais representativos. Entretanto, há diversos outliers próximos de zero, representando cursos nos quais poucos alunos possuem nota do ENEM. Esses valores discrepantes podem estar relacionados a instituições mais isoladas, cursos de áreas específicas ou mudanças recentes nos processos de ingresso. Em resumo, a maior parte das instituições mostra forte adesão ao ENEM, com poucas exceções que destoam do padrão nacional.
+  
+```{r}
+medidas_idd <- Enade_limpo %>%
+summarise(
+Média = mean(nota_idd, na.rm = TRUE),
+Mediana = median(nota_idd, na.rm = TRUE),
+Desvio_Padrão = sd(nota_idd, na.rm = TRUE),
+Mínimo = min(nota_idd, na.rm = TRUE),
+Máximo = max(nota_idd, na.rm = TRUE),
+Q1 = quantile(nota_idd, 0.25, na.rm = TRUE),
+Q3 = quantile(nota_idd, 0.75, na.rm = TRUE)
+)
+
+kable(medidas_idd, caption = "Medidas Descritivas - Nota Bruta IDD") %>%
+kable_styling(bootstrap_options = "striped")
+
+#Histograma + Densidade
+ggplot(Enade_limpo %>% filter(!is.na(nota_idd)), aes(x = nota_idd)) +
+geom_histogram(aes(y = after_stat(density)), bins = 30, fill = "lightgreen", color = "black", alpha = 0.7) +
+geom_density(color = "darkgreen", size = 1) +
+labs(title = "Distribuição - Nota Bruta IDD",
+x = "Nota IDD", y = "Densidade") + plot_theme
+
+#Boxplot
+ggplot(Enade_limpo %>% filter(!is.na(nota_idd)), aes(y = nota_idd)) +
+geom_boxplot(fill = "orange", alpha = 0.7) +
+labs(title = "Boxplot - Nota Bruta IDD", y = "Nota IDD") + plot_theme
+```
+  A média da nota IDD é `r round(resumo_geral$media_idd, 2)`, com mediana `r round(resumo_geral$mediana_idd, 2)` e desvio-padrão de `r round(resumo_geral$sd_idd, 2)`.
+ Os valores vão de `r round(medidas_idd$Mínimo, 2)` a `r round(medidas_idd$Máximo, 2)`, indicando distribuição simétrica e centralizada, com poucos outliers extremos.
+  
+  O histograma apresenta uma distribuição aproximadamente normal (em forma de sino), com média e mediana próximas de zero. Isso mostra que a maioria das instituições tem desempenho dentro do esperado, de acordo com o cálculo do IDD (Indicador de Diferença entre os Desempenhos Observado e Esperado). Poucos cursos apresentam notas muito altas ou muito baixas, caracterizando outliers que indicam desempenhos excepcionais (positivos ou negativos). A forma simétrica e centralizada da distribuição reforça que o IDD é um indicador equilibrado, que tende a nivelar o desempenho entre instituições ao considerar o perfil dos estudantes ingressantes e concluintes.
+  
+  A distribuição da nota IDD é simétrica e concentrada em torno do zero, indicando que as instituições, em geral, atingem o desempenho esperado segundo o modelo estatístico do indicador. O boxplot evidencia a presença de vários outliers em ambos os extremos, o que revela instituições com desempenho muito superior ou inferior ao padrão. A amplitude total dos dados mostra que há variabilidade considerável entre os cursos, mas com uma tendência central clara, reforçando que a maior parte das notas se concentra em um intervalo de desempenho médio.
+  
+```{r}
+#Regressão linear - Proporção ENEM x Nota IDD
+dados_regressao <- Enade_limpo %>%
+filter(!is.na(prop_enem), !is.na(nota_idd))
+
+correlacao <- cor(dados_regressao$prop_enem, dados_regressao$nota_idd)
+
+ggplot(dados_regressao, aes(x = prop_enem, y = nota_idd)) +
+geom_point(alpha = 0.3, color = "blue") +
+geom_smooth(method = "lm", formula = y ~ x, color = "red") +
+annotate("text", x = min(dados_regressao$prop_enem),
+y = max(dados_regressao$nota_idd),
+label = paste0("r = ", round(correlacao, 3)),
+hjust = 0, size = 5) +
+labs(title = "Relação entre Proporção ENEM e Nota IDD",
+x = "Proporção ENEM", y = "Nota IDD") + plot_theme
+
+modelo <- lm(nota_idd ~ prop_enem, data = dados_regressao)
+sumario_modelo <- summary(modelo)
+r2 <- sumario_modelo$adj.r.squared
+
+kable(sumario_modelo$coefficients, caption = "Coeficientes - Modelo de Regressão") %>%
+kable_styling(bootstrap_options = "striped")
+
+cat("R² ajustado:", round(sumario_modelo$adj.r.squared, 4), "\n")
+
+#Diagnióstico dos resíduos
+par(mfrow = c(2, 2))
+plot(modelo)
+par(mfrow = c(1, 1))
+```
+
+  A correlação entre a proporção de concluintes com nota no ENEM e a nota IDD é `r round(correlacao, 3)`, indicando relação positiva, porém fraca. O modelo linear apresenta R² ajustado de `r round(r2, 3)`, mostrando que essa variável explica apenas `r round(r2 * 100, 1)`% da variação no IDD. Isso evidencia que, embora exista tendência positiva, outros fatores têm maior influência no desempenho institucional.
+  O gráfico de dispersão apresenta correlação positiva fraca (r = 0,2134), o que indica que, à medida que aumenta a proporção de concluintes com nota do ENEM, há pequeno crescimento na nota IDD. A grande dispersão dos pontos mostra que não há relação linear forte, ou seja, o desempenho institucional não depende diretamente da proporção de alunos que possuem nota do ENEM. Ainda assim, a tendência positiva pode sugerir que instituições que adotam o ENEM de forma mais ampla tendem a apresentar um leve melhor desempenho médio, talvez devido à maior padronização ou à homogeneidade do perfil dos estudantes.
+  
+```{r}
+#Regressão linear - Nota CE × IDD (Contínuo)
+dados_regressao2 <- Enade_limpo %>%
+filter(!is.na(nota_ce), !is.na(idd_continuo))
+
+correlacao2 <- cor(dados_regressao2$nota_ce, dados_regressao2$idd_continuo)
+
+ggplot(dados_regressao2, aes(x = nota_ce, y = idd_continuo)) +
+geom_point(alpha = 0.3, color = "blue") +
+geom_smooth(method = "lm", formula = y ~ x, color = "red") +
+annotate("text", x = min(dados_regressao2$nota_ce),
+y = max(dados_regressao2$idd_continuo),
+label = paste0("r = ", round(correlacao2, 3)),
+hjust = 0, size = 5) +
+labs(title = "Relação entre Nota CE e IDD Contínuo",
+x = "Nota Padronizada CE", y = "IDD (Contínuo)") + plot_theme
+
+modelo2 <- lm(idd_continuo ~ nota_ce, data = dados_regressao2)
+sumario_modelo2 <- summary(modelo2)
+r2_2 <- sumario_modelo2$adj.r.squared
+
+kable(sumario_modelo2$coefficients, caption = "Coeficientes - CE x IDD") %>%
+kable_styling(bootstrap_options = "striped")
+
+cat("R² ajustado:", round(sumario_modelo2$adj.r.squared, 4), "\n")
+```
+  A correlação entre nota CE e IDD contínuo é `r round(correlacao2, 3)`, representando forte associação positiva. O modelo apresenta R² ajustado = `r round(r2_2, 3)`, ou seja, aproximadamente `r round(r2_2 * 100, 1)`% da variação do IDD é explicada pelo desempenho no conteúdo específico. Isso confirma que o aprendizado técnico da área tem influência direta e significativa sobre o indicador final.
+  
+  Neste gráfico, observa-se uma correlação forte e positiva (r = 0,7563) entre a nota padronizada de Conteúdo Específico (CE) e o IDD contínuo. Essa relação indica que quanto melhor o desempenho dos alunos nas provas de conteúdo específico, maior tende a ser o IDD, mostrando consistência no desempenho institucional. A forte linearidade dos pontos reforça que o IDD é fortemente influenciado pelo desempenho nas provas específicas, o que é coerente com sua função de medir o valor agregado pela instituição ao aprendizado dos estudantes.
+  
+```{r}
+# Estatísticas por área de avaliação
+
+estatisticas_por_area <- Enade_limpo %>%
+group_by(area) %>%
+summarise(
+Média = mean(nota_idd, na.rm = TRUE),
+Mediana = median(nota_idd, na.rm = TRUE),
+Desvio_Padrão = sd(nota_idd, na.rm = TRUE),
+n = n()
+) %>%
+arrange(desc(Média))
+
+datatable(estatisticas_por_area, caption = "Estatísticas - Nota IDD por Área")
+
+# Boxplot comparativo entre áreas
+
+ggplot(Enade_limpo %>% filter(!is.na(nota_idd)),
+aes(x = reorder(area, nota_idd, FUN = median), y = nota_idd)) +
+geom_boxplot(fill = "lightblue", alpha = 0.7, outlier.alpha = 0.3) +
+labs(title = "Distribuição da Nota IDD por Área de Avaliação",
+x = "Área", y = "Nota IDD") +
+theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, size = 8))
+```
+  
+  O boxplot comparativo demonstra que a **média geral da nota IDD** é `r round(resumo_geral$media_idd, 2)` e a **mediana** é `r round(resumo_geral$mediana_idd, 2)`. Esses valores indicam equilíbrio geral entre as áreas avaliadas.
+
+Áreas como **Engenharia Civil**, **Enfermagem** e **Arquitetura** apresentam maior dispersão,  refletida em desvios-padrão mais altos (`r round(sd(Enade_limpo$nota_idd[Enade_limpo$area %in% c('Engenharia Civil', 'Enfermagem', 'Arquitetura')], na.rm = TRUE), 2)` em média), o que evidencia **heterogeneidade no desempenho** entre cursos da mesma área.
+
+Por outro lado, áreas como **Nutrição** e **Engenharia Florestal** possuem distribuições mais concentradas,  com menor variabilidade (`r round(sd(Enade_limpo$nota_idd[Enade_limpo$area %in% c('Nutrição', 'Engenharia Florestal')], na.rm = TRUE), 2)` em média),  o que sugere **maior consistência interna** nos resultados dessas áreas.
+
+De modo geral, a distribuição mostra que, embora a média e a mediana das notas IDD sejam semelhantes entre as áreas,  a **dispersão** (variabilidade) dos resultados é o principal fator que diferencia o desempenho entre os cursos.
